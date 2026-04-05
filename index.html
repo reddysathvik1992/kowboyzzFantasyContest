@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Contest Admin Panel</title>
+
+<style>
+body {
+  font-family: Arial, sans-serif;
+  background:#0b1a2f;
+  color:white;
+  margin:0;
+  padding:20px;
+  text-align:center;
+}
+
+h1 { margin-bottom:10px; }
+
+.table-container {
+  height: 260px;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: max-content;
+  margin: auto;
+}
+
+td, th {
+  border:1px solid #444;
+  padding:6px;
+  min-width:70px;
+  font-size:12px;
+}
+
+th {
+  background:#142c4f;
+  color:#ffd700;
+  position: sticky;
+  top: 0;
+}
+
+td:first-child, th:first-child {
+  min-width:140px;
+}
+
+input {
+  width:45px;
+  padding:3px;
+  text-align:center;
+  border-radius:4px;
+  border:none;
+}
+
+.total-row th {
+  position: sticky;
+  bottom: 0;
+  background:#000;
+  color:#ffd700;
+}
+
+input[readonly] {
+  background:#e0e0e0;
+  color:#000;
+  font-weight:bold;
+}
+
+button {
+  padding:10px 15px;
+  margin:10px;
+  border:none;
+  border-radius:6px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.login-btn { background:#28a745; color:white; }
+.save-btn { background:#ffd700; color:black; }
+</style>
+</head>
+
+<body>
+
+<h1>🏆 Contest Admin Panel</h1>
+
+<div id="loginDiv">
+  <input id="name" placeholder="Enter name">
+  <br>
+  <button class="login-btn" onclick="login()">Login</button>
+</div>
+
+<div id="mainDiv" style="display:none;">
+  <div class="table-container">
+    <table id="scoreTable"></table>
+  </div>
+
+  <button id="saveBtn" class="save-btn" onclick="saveAll()">💾 Save All</button>
+  <button class="save-btn" onclick="showLeaderboard()">🏆 Leaderboard</button>
+</div>
+<div id="leaderboardModal" style="
+display:none;
+position:fixed;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+background:white;
+color:black;
+padding:20px;
+border-radius:10px;
+width:90%;
+max-width:400px;
+max-height:80vh;
+overflow-y:auto;
+z-index:1000;
+">
+
+  <h3>🏆 Leaderboard</h3>
+  <div id="leaderboardContent"></div>
+
+  <br>
+  <button onclick="closeLeaderboard()">Close</button>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyCBtPDhhgWeV3H3AZlJEgfDwFoQ9YhVchY",
+  authDomain: "sathvik-bd250.firebaseapp.com",
+  projectId: "sathvik-bd250"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+let users = [];
+let matches = [];
+let data = {};
+let role = "";
+
+// LOGIN
+async function login(){
+  const name = document.getElementById("name").value.trim();
+
+  if(!name){
+    alert("Enter name ❌");
+    return;
+  }
+
+  const adminDoc = await db.collection("admins1").doc(name).get();
+
+  if(adminDoc.exists){
+    role = "admin";
+  } else {
+    const userDoc = await db.collection("users1").doc(name).get();
+
+    if(userDoc.exists){
+      role = "viewer";
+    } else {
+      alert("Access Denied ❌");
+      return;
+    }
+  }
+
+  document.getElementById("loginDiv").style.display="none";
+  document.getElementById("mainDiv").style.display="block";
+
+  if(role === "viewer"){
+    document.getElementById("saveBtn").style.display = "none";
+  }
+
+  loadData();
+}
+
+// LOAD
+async function loadData(){
+  const usersSnap = await db.collection("contestants").get();
+  users = usersSnap.docs.map(d => d.id);
+
+matches = [
+ {home:"RCB", away:"SRH", date:"28-Mar"},
+ {home:"MI", away:"KKR", date:"29-Mar"},
+ {home:"RR", away:"CSK", date:"30-Mar"},
+ {home:"PBKS", away:"GT", date:"31-Mar"},
+ {home:"LSG", away:"DC", date:"01-Apr"},
+ {home:"KKR", away:"SRH", date:"02-Apr"},
+ {home:"CSK", away:"PBKS", date:"03-Apr"},
+ {home:"DC", away:"MI", date:"04-Apr"},
+ {home:"GT", away:"RR", date:"04-Apr"},
+ {home:"SRH", away:"LSG", date:"05-Apr"},
+ {home:"RCB", away:"CSK", date:"05-Apr"},
+ {home:"KKR", away:"PBKS", date:"06-Apr"},
+ {home:"RR", away:"MI", date:"07-Apr"},
+ {home:"DC", away:"GT", date:"08-Apr"},
+ {home:"KKR", away:"LSG", date:"09-Apr"},
+ {home:"RR", away:"RCB", date:"10-Apr"},
+ {home:"PBKS", away:"SRH", date:"11-Apr"},
+ {home:"CSK", away:"DC", date:"11-Apr"},
+ {home:"LSG", away:"GT", date:"12-Apr"},
+ {home:"MI", away:"RCB", date:"12-Apr"},
+ {home:"SRH", away:"RR", date:"13-Apr"},
+ {home:"CSK", away:"KKR", date:"14-Apr"},
+ {home:"RCB", away:"LSG", date:"15-Apr"},
+ {home:"MI", away:"PBKS", date:"16-Apr"},
+ {home:"GT", away:"KKR", date:"17-Apr"},
+ {home:"RCB", away:"DC", date:"18-Apr"},
+ {home:"SRH", away:"CSK", date:"18-Apr"},
+ {home:"KKR", away:"RR", date:"19-Apr"},
+ {home:"PBKS", away:"LSG", date:"19-Apr"},
+ {home:"GT", away:"MI", date:"20-Apr"},
+ {home:"SRH", away:"DC", date:"21-Apr"},
+ {home:"LSG", away:"RR", date:"22-Apr"},
+ {home:"MI", away:"CSK", date:"23-Apr"},
+ {home:"RCB", away:"GT", date:"24-Apr"},
+ {home:"DC", away:"PBKS", date:"25-Apr"},
+ {home:"RR", away:"SRH", date:"25-Apr"},
+ {home:"GT", away:"CSK", date:"26-Apr"},
+ {home:"LSG", away:"KKR", date:"26-Apr"},
+ {home:"DC", away:"RCB", date:"27-Apr"},
+ {home:"PBKS", away:"RR", date:"28-Apr"},
+ {home:"MI", away:"SRH", date:"29-Apr"},
+ {home:"GT", away:"RCB", date:"30-Apr"},
+ {home:"RR", away:"DC", date:"01-May"},
+ {home:"CSK", away:"MI", date:"02-May"},
+ {home:"SRH", away:"KKR", date:"03-May"},
+ {home:"GT", away:"PBKS", date:"03-May"},
+ {home:"MI", away:"LSG", date:"04-May"},
+ {home:"DC", away:"CSK", date:"05-May"},
+ {home:"SRH", away:"PBKS", date:"06-May"},
+ {home:"LSG", away:"RCB", date:"07-May"},
+ {home:"DC", away:"KKR", date:"08-May"},
+ {home:"RR", away:"GT", date:"09-May"},
+ {home:"CSK", away:"LSG", date:"10-May"},
+ {home:"RCB", away:"MI", date:"10-May"},
+ {home:"PBKS", away:"DC", date:"11-May"},
+ {home:"GT", away:"SRH", date:"12-May"},
+ {home:"RCB", away:"KKR", date:"13-May"},
+ {home:"PBKS", away:"MI", date:"14-May"},
+ {home:"LSG", away:"CSK", date:"15-May"},
+ {home:"KKR", away:"GT", date:"16-May"},
+ {home:"PBKS", away:"RCB", date:"17-May"},
+ {home:"DC", away:"RR", date:"17-May"},
+ {home:"CSK", away:"SRH", date:"18-May"},
+ {home:"RR", away:"LSG", date:"19-May"},
+ {home:"KKR", away:"MI", date:"20-May"},
+ {home:"CSK", away:"GT", date:"21-May"},
+ {home:"SRH", away:"RCB", date:"22-May"},
+ {home:"LSG", away:"PBKS", date:"23-May"},
+ {home:"MI", away:"RR", date:"24-May"},
+ {home:"KKR", away:"DC", date:"24-May"}
+];
+
+db.collection("contest_points").onSnapshot((snapshot) => {
+  snapshot.forEach(doc => data[doc.id] = doc.data());
+  renderTable();
+});
+
+}
+
+// RENDER
+function renderTable(){
+  let html = "<tr><th>Match</th>";
+
+  users.forEach(u=> html += `<th>${u}</th>`);
+  html += "</tr>";
+
+
+matches.forEach(m=>{
+    const key = `${m.home}_vs_${m.away}_${m.date}`;
+
+    html += `<tr><td>${m.home} vs ${m.away} (${m.date})</td>`;
+
+    users.forEach(u=>{
+      let val = data[key]?.[u] ?? "";
+
+      html += `
+        <td>
+          <input type="number" value="${val}"
+${role==="viewer"?"readonly":""}
+          onchange="updateValue('${key}','${u}',this.value)">
+        </td>`;
+    });
+
+    html += "</tr>";
+  });
+
+  // TOTAL
+  html += "<tr class='total-row'><th>Total</th>";
+
+users.forEach(u=>{
+  let total = 0;
+
+  // ✅ use ALL matches for total
+  matches.forEach(m=>{
+    const key = `${m.home}_vs_${m.away}_${m.date}`;
+    total += Number(data[key]?.[u] || 0);
+  });
+
+  html += `<th>${total}</th>`;
+});
+
+  html += "</tr>";
+
+  document.getElementById("scoreTable").innerHTML = html;
+
+// 🔥 scroll to latest matches (correct place)
+setTimeout(scrollToToday, 100);
+}
+
+function scrollToToday(){
+
+  const container = document.querySelector(".table-container");
+  const rows = document.querySelectorAll("#scoreTable tr");
+
+  if(!container || rows.length === 0) return;
+
+  const today = new Date();
+  const monthMap = {Jan:0, Feb:1, Mar:2, Apr:3, May:4};
+
+  let targetIndex = -1;
+
+  matches.forEach((m, i) => {
+    const [day, mon] = m.date.split("-");
+    const d = new Date(2026, monthMap[mon], Number(day));
+
+    // find closest match <= today
+    if(d <= today){
+      targetIndex = i;
+    }
+  });
+
+  if(targetIndex === -1) return;
+
+  // +1 because first row is header
+  const targetRow = rows[targetIndex + 1];
+
+  if(targetRow){
+    const containerTop = container.getBoundingClientRect().top;
+    const rowTop = targetRow.getBoundingClientRect().top;
+
+    container.scrollTop += (rowTop - containerTop) - 100;
+  }
+}
+
+// UPDATE
+function updateValue(matchKey, user, val){
+  if(!data[matchKey]) data[matchKey] = {};
+
+  data[matchKey][user] = Number(val);
+
+  if(!data[matchKey]._filled){
+    users.forEach(u=>{
+      if(u!==user && data[matchKey][u]===undefined){
+        data[matchKey][u] = -100;
+      }
+    });
+    data[matchKey]._filled = true;
+  }
+
+  renderTable();
+}
+
+// SAVE
+async function saveAll(){
+  for(const m of matches){
+    const key = `${m.home}_vs_${m.away}_${m.date}`;
+    let obj = {};
+    users.forEach(u=> obj[u] = data[key]?.[u] ?? 0);
+    await db.collection("contest_points").doc(key).set(obj);
+  }
+  alert("Saved ✅");
+}
+
+// LEADERBOARD
+function showLeaderboard(){
+
+  let scores = {};
+  users.forEach(u => scores[u] = 0);
+
+  matches.forEach(m=>{
+    const key = `${m.home}_vs_${m.away}_${m.date}`;
+    users.forEach(u=>{
+      scores[u] += Number(data[key]?.[u] || 0);
+    });
+  });
+
+  let arr = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+
+  let html = "";
+
+  let rank = 1;
+  let prevScore = null;
+
+  arr.forEach((item, index) => {
+
+    if(item[1] !== prevScore){
+      rank = index + 1;
+    }
+
+    // 🥇🥈🥉 medals
+    let medal = "";
+    if(rank === 1) medal = "🥇";
+    else if(rank === 2) medal = "🥈";
+    else if(rank === 3) medal = "🥉";
+
+    html += `<p>${medal} ${rank}. ${item[0]} → ${item[1]}</p>`;
+
+    prevScore = item[1];
+  });
+
+  document.getElementById("leaderboardContent").innerHTML = html;
+  document.getElementById("leaderboardModal").style.display = "block";
+}
+
+function closeLeaderboard(){
+  document.getElementById("leaderboardModal").style.display = "none";
+}
+</script>
+
+</body>
+</html>

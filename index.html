@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Contest Admin Panel</title>
+<title>kowboyzz IPL 2026</title>
 
 <style>
 body {
@@ -20,6 +20,71 @@ h1 { margin-bottom:10px; }
   overflow-y: auto;
   overflow-x: auto;
 }
+
+.main-layout {
+  display: flex;
+  justify-content: center;
+  align-items: center; /* ✅ vertical center */
+  gap: 40px;
+  margin-top: 30px;
+  flex-wrap: wrap;
+}
+
+.left-panel {
+  flex: 1;
+  min-width: 300px;
+  max-width: 450px;
+}
+
+
+.right-panel {
+  flex: 1;
+  min-width: 250px;
+  max-width: 350px;
+  background: #142c4f;
+  padding: 20px;
+  border-radius: 12px;
+
+  display: flex;              /* ✅ */
+  justify-content: center;    /* horizontal center */
+  align-items: center;        /* vertical center */
+}
+
+.login-msg {
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #ffd700;
+}
+
+/* Leaderboard Styling */
+.leaderboard-table {
+  margin: auto;
+  border-collapse: collapse;
+  width: 100%;
+  max-width: 400px;
+  background: #142c4f;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.leaderboard-table th {
+  background: #000;
+  color: #ffd700;
+  padding: 10px;
+}
+
+.leaderboard-table td {
+  padding: 8px;
+  border-bottom: 1px solid #333;
+}
+
+.rank-1 { color: gold; font-weight: bold; }
+.rank-2 { color: silver; font-weight: bold; }
+.rank-3 { color: #cd7f32; font-weight: bold; }
+
+.positive { color: #00ff88; font-weight: bold; }
+.negative { color: #ff4d4d; font-weight: bold; }
+.zero { color: #ccc; }
 
 table {
   border-collapse: collapse;
@@ -43,6 +108,36 @@ th {
 
 td:first-child, th:first-child {
   min-width:140px;
+}
+
+.login-box {
+  text-align: center;
+}
+
+/* Animation */
+.fade-in {
+  animation: fadeInUp 0.4s ease;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Optional highlight change */
+.highlight {
+  animation: glow 1s ease;
+}
+
+@keyframes glow {
+  0% { background-color: rgba(255,215,0,0.3); }
+  100% { background-color: transparent; }
 }
 
 input {
@@ -82,12 +177,29 @@ button {
 
 <body>
 
-<h1>🏆 Contest Admin Panel</h1>
+<h1>🏆kowboyzz IPL 2026</h1>
 
+<div class="main-layout">
+
+  <!-- LEFT: Leaderboard -->
+  <div class="left-panel" id="publicSection">
+    <h2>🏆 Live Leaderboard</h2>
+    <div id="publicLeaderboard">Loading...</div>
+  </div>
+
+  <!-- RIGHT: Login -->
+  <div class="right-panel">
 <div id="loginDiv">
-  <input id="name" placeholder="Enter name">
-  <br>
-  <button class="login-btn" onclick="login()">Login</button>
+  <div class="login-box">
+    <div class="login-msg">👉 Login to see all matches points</div>
+
+    <input id="name" placeholder="Enter name">
+    <br><br>
+    <button class="login-btn" onclick="login()">Login</button>
+  </div>
+</div>
+  </div>
+
 </div>
 
 <div id="mainDiv" style="display:none;">
@@ -126,6 +238,7 @@ z-index:1000;
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
 <script>
+let previousRanks = {};
 const firebaseConfig = {
   apiKey: "AIzaSyCBtPDhhgWeV3H3AZlJEgfDwFoQ9YhVchY",
   authDomain: "sathvik-bd250.firebaseapp.com",
@@ -164,6 +277,8 @@ async function login(){
     }
   }
 
+document.querySelector(".login-msg").style.display = "none";
+document.getElementById("publicSection").style.display = "none";
   document.getElementById("loginDiv").style.display="none";
   document.getElementById("mainDiv").style.display="block";
 
@@ -346,17 +461,28 @@ function scrollToToday(){
 
 // UPDATE
 function updateValue(matchKey, user, val){
+
   if(!data[matchKey]) data[matchKey] = {};
 
-  data[matchKey][user] = Number(val);
+  let num = Number(val);
 
-  if(!data[matchKey]._filled){
-    users.forEach(u=>{
-      if(u!==user && data[matchKey][u]===undefined){
+  // check BEFORE updating
+  let existingValues = Object.values(data[matchKey]).filter(v => typeof v === "number");
+
+  let hasRealEntry = existingValues.some(v => v !== 0 && v !== -100);
+
+  // update current value
+  data[matchKey][user] = num;
+
+  // ✅ trigger ONLY if first real entry in row
+  if(num !== 0 && !hasRealEntry){
+
+    users.forEach(u => {
+      if(u !== user){
         data[matchKey][u] = -100;
       }
     });
-    data[matchKey]._filled = true;
+
   }
 
   renderTable();
@@ -414,14 +540,87 @@ function showLeaderboard(){
   document.getElementById("leaderboardModal").style.display = "block";
 }
 
+async function loadPublicLeaderboard(){
+
+  const usersSnap = await db.collection("contestants").get();
+  let users = usersSnap.docs.map(d => d.id);
+
+  db.collection("contest_points").onSnapshot((snapshot) => {
+
+    let scores = {};
+    users.forEach(u => scores[u] = 0);
+
+    snapshot.forEach(doc => {
+      const matchData = doc.data();
+
+      users.forEach(u => {
+        scores[u] += Number(matchData[u] || 0);
+      });
+    });
+
+    let arr = Object.entries(scores).sort((a,b)=>b[1]-a[1]);
+
+    let html = `
+      <table class="leaderboard-table">
+        <tr>
+          <th>Rank</th>
+          <th>Player</th>
+          <th>Points</th>
+        </tr>
+    `;
+
+    let rank = 1;
+    let prevScore = null;
+
+arr.forEach((item, index) => {
+
+  if(item[1] !== prevScore){
+    rank = index + 1;
+  }
+
+  let rankClass = "";
+  if(rank === 1) rankClass = "rank-1";
+  else if(rank === 2) rankClass = "rank-2";
+  else if(rank === 3) rankClass = "rank-3";
+
+  let scoreClass = "zero";
+  if(item[1] > 0) scoreClass = "positive";
+  else if(item[1] < 0) scoreClass = "negative";
+
+  // ✅ FIX: define BEFORE using
+  let highlightClass = "";
+
+  if(previousRanks[item[0]] && previousRanks[item[0]] !== rank){
+    highlightClass = "highlight";
+  }
+
+  previousRanks[item[0]] = rank;
+
+  html += `
+    <tr class="fade-in ${highlightClass}">
+      <td class="${rankClass}">${rank}</td>
+      <td>${item[0]}</td>
+      <td class="${scoreClass}">${item[1]}</td>
+    </tr>
+  `;
+
+  prevScore = item[1];
+});
+
+    html += `</table>`;
+
+    document.getElementById("publicLeaderboard").innerHTML = html;
+  });
+}
 function closeLeaderboard(){
   document.getElementById("leaderboardModal").style.display = "none";
 }
 
 window.onload = function(){
-  // show login first
   document.getElementById("loginDiv").style.display = "block";
   document.getElementById("mainDiv").style.display = "none";
+
+  loadPublicLeaderboard(); // 👈 NEW
 };
 
 </script>
